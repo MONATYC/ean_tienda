@@ -132,15 +132,24 @@ def generate_labels_pdf(products, copies_per_product=24):
     width, height = A4
 
     # Parrilla: márgenes y tamaños de celda
-    margin_x = 10 * mm
-    margin_y = 10 * mm
+    # Margen exterior: 0.8 cm lateral, 1.2 cm arriba/abajo
+    margin_x = 8 * mm
+    margin_y = 12 * mm
+
     cols = 3
     rows = 8
-    cell_w = (width - 2 * margin_x) / cols
-    cell_h = (height - 2 * margin_y) / rows
 
-    img_max_w = cell_w * 0.9
-    img_max_h = cell_h * 0.50  # deja sitio para texto
+    # Cada rectángulo (etiqueta) mide 6.5 cm x 3.5 cm
+    cell_w = 65 * mm
+    cell_h = 35 * mm
+
+    # Espacio mínimo de 0.5 cm con el borde del rectángulo
+    inner_margin = 5 * mm
+
+    # Dimensiones máximas para la imagen del código de barras
+    img_max_w = cell_w - 2 * inner_margin
+    # Altura disponible tras restar espacio para texto (dos líneas) y márgenes
+    img_max_h = cell_h - 2 * inner_margin - (3.5 * mm + 4 * mm)
 
     for product_name in products:
         ean_code = st.session_state.df_inventory.loc[
@@ -161,11 +170,15 @@ def generate_labels_pdf(products, copies_per_product=24):
                     x0 = margin_x + col * cell_w
                     y0 = height - margin_y - (row + 1) * cell_h
 
-                    # Centrar la imagen dentro de la celda
+                    # Posiciones centradas con margen interno
                     img_w = img_max_w
                     img_h = img_max_h
                     img_x = x0 + (cell_w - img_w) / 2
-                    img_y = y0 + (cell_h - img_h) / 2 + 6 * mm  # ligeramente arriba
+
+                    # Líneas de texto y márgenes
+                    text_y_ean = y0 + inner_margin
+                    text_y_product = text_y_ean + 3.5 * mm
+                    img_y = text_y_product + 4 * mm
 
                     c.drawImage(
                         barcode_img,
@@ -177,12 +190,11 @@ def generate_labels_pdf(products, copies_per_product=24):
                         mask="auto",
                     )
 
-                    # Texto bajo el código
-                    text_y = img_y - 4 * mm
+                    # Texto centrado dentro de la celda
                     c.setFont("Helvetica-Bold", 6)
-                    c.drawCentredString(x0 + cell_w / 2, text_y, product_name)
+                    c.drawCentredString(x0 + cell_w / 2, text_y_product, product_name)
                     c.setFont("Helvetica", 6)
-                    c.drawCentredString(x0 + cell_w / 2, text_y - 3.5 * mm, ean_code)
+                    c.drawCentredString(x0 + cell_w / 2, text_y_ean, ean_code)
             c.showPage()
         except Exception as e:
             st.error(f"Error al generar código de barras para {ean_code}: {e}")
