@@ -224,7 +224,7 @@ def render_pdf_buffer(product_list):
         "module_height": 25.0,  # altura del código de barras en mm
         "quiet_zone": 2.0,  # zona de silencio en mm
         "font_size": 15,  # tamaño de fuente para el texto
-        "text_distance": 6.0,  # distancia entre el código y el texto
+        "text_distance": 7.0,  # distancia entre el código y el texto
         "dpi": 400,  # resolución en DPI
     }
 
