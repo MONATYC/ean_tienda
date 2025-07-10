@@ -20,8 +20,8 @@ from datetime import datetime
 class EAN13NoChecksum(Barcode):
     """
     Barcode class that keeps the provided 13 digits unchanged.
-    This lets us re‑use already‑calculated EANs coming from the inventory
-    without forcing the python‑barcode library to recalculate the checksum.
+    This lets us re-use already-calculated EANs coming from the inventory
+    without forcing the python-barcode library to recalculate the checksum.
     """
 
     name = "EAN13-NoChecksum"
@@ -77,7 +77,7 @@ if "uploaded_filename" not in st.session_state:
 #  FUNCTIONS
 # -----------------------------------
 
-COUNTRY_PREFIX = "84370000"  # 8‑digits : 84 (ES) + 370000 (organización)
+COUNTRY_PREFIX = "84370000"  # 8-digits : 84 (ES) + 370000 (organización)
 
 
 def _next_sequential_number(df: pd.DataFrame) -> int:
@@ -89,7 +89,7 @@ def _next_sequential_number(df: pd.DataFrame) -> int:
         return 1
     seq_max = (
         df["EAN"]
-        .str.slice(8, 12)  # posiciones 9‑12 => parte secuencial de 4 dígitos
+        .str.slice(8, 12)  # posiciones 9-12 => parte secuencial de 4 dígitos
         .astype(int)
         .max()
     )
@@ -98,7 +98,7 @@ def _next_sequential_number(df: pd.DataFrame) -> int:
 
 def generate_next_ean(df: pd.DataFrame) -> str:
     """
-    Genera el siguiente código EAN‑13 disponible.
+    Genera el siguiente código EAN-13 disponible.
     Mantiene un prefijo de 8 dígitos y usa 4 para la parte secuencial.
     El 13º dígito (checksum) lo calcula automáticamente la librería.
     """
@@ -120,7 +120,7 @@ def generate_labels_pdf(products, copies_per_product=24):
     para cada producto seleccionado. Cada celda incluye:
         • imagen del código de barras
         • nombre del producto
-        • código EAN (texto)
+    (El texto con los 13 dígitos ya aparece dentro de la imagen generada).
     """
     if not products:
         st.warning("No hay productos seleccionados.")
@@ -143,41 +143,48 @@ def generate_labels_pdf(products, copies_per_product=24):
     cell_w = 65 * mm
     cell_h = 35 * mm
 
-    # Margen interno horizontal y vertical para la imagen y el texto
-    h_margin = 5 * mm  # 0.5 cm a cada lado
+    # Margen interno horizontal y vertical para imagen y texto
+    h_margin = 5 * mm  # 0,5 cm a cada lado
     v_margin = 4 * mm  # margen vertical interno
 
+    # Ahora solo hay UNA línea de texto ⇒ reservamos ≈ 3,5 mm
+    text_block_h = 3.5 * mm
+
     # Dimensiones máximas para la imagen del código de barras
-    img_max_w = cell_w - 2 * h_margin  # ancho máximo imagen (55 mm)
-    # Altura disponible tras descontar márgenes y espacio para texto (7 mm)
-    img_max_h = cell_h - 2 * v_margin - 7 * mm
+    img_max_w = cell_w - 2 * h_margin
+    img_max_h = cell_h - 2 * v_margin - text_block_h
+
+    # Writer-options para hacer el código más alto (sin variar la fuente)
+    writer_opts = {
+        "module_width": 0.35,  # barras ligeramente más anchas
+        "module_height": 30.0,  # barras más altas
+        "quiet_zone": 2.0,  # margen blanco reducido
+        "font_size": 10,  # tamaño de texto de los dígitos
+        "text_distance": 1.0,
+        "dpi": 400,
+    }
 
     # --- DIBUJAR GRILLA DE ETIQUETAS Y MÁRGENES ---
-    # Líneas de margen exterior
     c.saveState()
     c.setStrokeColorRGB(0.2, 0.2, 0.2)
     c.setLineWidth(1)
-    # Margen izquierdo
-    c.line(margin_x, margin_y, margin_x, height - margin_y)
-    # Margen derecho
-    c.line(width - margin_x, margin_y, width - margin_x, height - margin_y)
-    # Margen superior
-    c.line(margin_x, height - margin_y, width - margin_x, height - margin_y)
-    # Margen inferior
-    c.line(margin_x, margin_y, width - margin_x, margin_y)
+    c.line(margin_x, margin_y, margin_x, height - margin_y)  # izq
+    c.line(width - margin_x, margin_y, width - margin_x, height - margin_y)  # dcha
+    c.line(margin_x, height - margin_y, width - margin_x, height - margin_y)  # sup
+    c.line(margin_x, margin_y, width - margin_x, margin_y)  # inf
 
-    # Líneas verticales de la grilla (entre etiquetas)
     c.setStrokeColorRGB(0.5, 0.5, 0.5)
     c.setLineWidth(0.7)
     c.setDash(3, 2)
+    # Líneas verticales
     for col in range(1, cols):
         x = margin_x + col * cell_w
         c.line(x, margin_y, x, height - margin_y)
-    # Líneas horizontales de la grilla (entre etiquetas)
+    # Líneas horizontales
     for row in range(1, rows):
         y = height - margin_y - row * cell_h
         c.line(margin_x, y, width - margin_x, y)
-    c.setDash()  # Reset dash
+    c.setDash()
     c.restoreState()
 
     for product_name in products:
@@ -188,39 +195,29 @@ def generate_labels_pdf(products, copies_per_product=24):
         try:
             barcode_obj = EAN13NoChecksum(ean_code, writer=ImageWriter())
             buffer = BytesIO()
-            barcode_obj.write(buffer)
+            # pasamos las opciones al escribir para obtener un PNG más grande
+            barcode_obj.write(buffer, options=writer_opts)
             buffer.seek(0)
             barcode_img = ImageReader(buffer)
 
-            # --- Escalar para ocupar todo el ancho menos 0,5 cm ---
+            # Ajustar tamaño en la celda manteniendo proporciones
             orig_w, orig_h = barcode_img.getSize()
-            scale = img_max_w / orig_w  # primero ajustamos por ancho
-            scaled_w = img_max_w
+            scale = min(img_max_w / orig_w, img_max_h / orig_h)
+            scaled_w = orig_w * scale
             scaled_h = orig_h * scale
 
-            if scaled_h > img_max_h:  # si la altura se pasa, reajustamos
-                scale = img_max_h / orig_h
-                scaled_w = orig_w * scale
-                scaled_h = img_max_h
-            # -------------------------------------------------------
-
-            # Dibujar 24 copias en la página (3 columnas x 8 filas)
+            # Dibujar 24 copias (3×8)
             for row in range(rows):
                 for col in range(cols):
-                    # Coordenadas de la esquina inferior‑izquierda de la celda
                     x0 = margin_x + col * cell_w
                     y0 = height - margin_y - (row + 1) * cell_h
 
-                    # Posiciones calculadas para centrar la imagen y situar el texto
-                    img_x = x0 + (cell_w - scaled_w) / 2  # centrado horizontal
-                    img_y = (
-                        y0 + cell_h - v_margin - scaled_h
-                    )  # imagen arriba con margen vertical
+                    # Imagen arriba, texto debajo y más pegado (1 mm)
+                    img_x = x0 + (cell_w - scaled_w) / 2
+                    img_y = y0 + cell_h - v_margin - scaled_h
+                    text_y = img_y - 1 * mm  # 1 mm separación
 
-                    text_y_product = img_y - 3.5 * mm  # línea nombre producto
-                    text_y_ean = text_y_product - 3.5 * mm  # línea código EAN
-
-                    # Dibujar código de barras
+                    # Dibujar imagen
                     c.drawImage(
                         barcode_img,
                         img_x,
@@ -231,11 +228,9 @@ def generate_labels_pdf(products, copies_per_product=24):
                         mask="auto",
                     )
 
-                    # Dibujar texto centrado
+                    # Nombre del producto (centrado)
                     c.setFont("Helvetica-Bold", 6)
-                    c.drawCentredString(x0 + cell_w / 2, text_y_product, product_name)
-                    c.setFont("Helvetica", 6)
-                    c.drawCentredString(x0 + cell_w / 2, text_y_ean, ean_code)
+                    c.drawCentredString(x0 + cell_w / 2, text_y, product_name)
             c.showPage()
         except Exception as e:
             st.error(f"Error al generar código de barras para {ean_code}: {e}")
@@ -257,13 +252,12 @@ def generate_labels_pdf(products, copies_per_product=24):
 st.header("1. Carga de inventario")
 uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 
-# Carga el inventario SOLO si el archivo es nuevo o distinto del cargado antes
 if uploaded_file and uploaded_file.name != st.session_state.get("uploaded_filename"):
     try:
         df = pd.read_excel(uploaded_file, sheet_name="Hoja1", dtype=str)
         df.columns = [c.strip() for c in df.columns]
 
-        # Renombrar columnas
+        # Renombrar
         col_map = {}
         for col in df.columns:
             col_lower = col.lower()
@@ -278,7 +272,6 @@ if uploaded_file and uploaded_file.name != st.session_state.get("uploaded_filena
                 "El archivo debe contener las columnas 'Producto' y 'EAN'."
             )
 
-        # Normalizar EAN
         df["EAN"] = (
             df["EAN"].astype(str).str.replace(".0", "", regex=False).str.zfill(13)
         )
