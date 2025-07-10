@@ -143,13 +143,14 @@ def generate_labels_pdf(products, copies_per_product=24):
     cell_w = 65 * mm
     cell_h = 35 * mm
 
-    # Espacio mínimo de 0.5 cm con el borde del rectángulo
-    inner_margin = 5 * mm
+    # Margen interno horizontal y vertical para la imagen y el texto
+    h_margin = 5 * mm  # 0.5 cm a cada lado
+    v_margin = 4 * mm  # margen vertical interno
 
     # Dimensiones máximas para la imagen del código de barras
-    img_max_w = cell_w - 2 * inner_margin
-    # Altura disponible tras restar espacio para texto (dos líneas) y márgenes
-    img_max_h = cell_h - 2 * inner_margin - (3.5 * mm + 4 * mm)
+    img_max_w = cell_w - 2 * h_margin  # ancho máximo imagen (55 mm)
+    # Altura disponible tras descontar márgenes y espacio para texto (7 mm)
+    img_max_h = cell_h - 2 * v_margin - 7 * mm
 
     # --- DIBUJAR GRILLA DE ETIQUETAS Y MÁRGENES ---
     # Líneas de margen exterior
@@ -191,34 +192,46 @@ def generate_labels_pdf(products, copies_per_product=24):
             buffer.seek(0)
             barcode_img = ImageReader(buffer)
 
-            # Dibujar 24 copias en la página
+            # --- Escalar para ocupar todo el ancho menos 0,5 cm ---
+            orig_w, orig_h = barcode_img.getSize()
+            scale = img_max_w / orig_w  # primero ajustamos por ancho
+            scaled_w = img_max_w
+            scaled_h = orig_h * scale
+
+            if scaled_h > img_max_h:  # si la altura se pasa, reajustamos
+                scale = img_max_h / orig_h
+                scaled_w = orig_w * scale
+                scaled_h = img_max_h
+            # -------------------------------------------------------
+
+            # Dibujar 24 copias en la página (3 columnas x 8 filas)
             for row in range(rows):
                 for col in range(cols):
                     # Coordenadas de la esquina inferior‑izquierda de la celda
                     x0 = margin_x + col * cell_w
                     y0 = height - margin_y - (row + 1) * cell_h
 
-                    # Posiciones centradas con margen interno
-                    img_w = img_max_w
-                    img_h = img_max_h
-                    img_x = x0 + (cell_w - img_w) / 2
+                    # Posiciones calculadas para centrar la imagen y situar el texto
+                    img_x = x0 + (cell_w - scaled_w) / 2  # centrado horizontal
+                    img_y = (
+                        y0 + cell_h - v_margin - scaled_h
+                    )  # imagen arriba con margen vertical
 
-                    # Líneas de texto y márgenes
-                    text_y_ean = y0 + inner_margin
-                    text_y_product = text_y_ean + 3.5 * mm
-                    img_y = text_y_product + 4 * mm
+                    text_y_product = img_y - 3.5 * mm  # línea nombre producto
+                    text_y_ean = text_y_product - 3.5 * mm  # línea código EAN
 
+                    # Dibujar código de barras
                     c.drawImage(
                         barcode_img,
                         img_x,
                         img_y,
-                        width=img_w,
-                        height=img_h,
+                        width=scaled_w,
+                        height=scaled_h,
                         preserveAspectRatio=True,
                         mask="auto",
                     )
 
-                    # Texto centrado dentro de la celda
+                    # Dibujar texto centrado
                     c.setFont("Helvetica-Bold", 6)
                     c.drawCentredString(x0 + cell_w / 2, text_y_product, product_name)
                     c.setFont("Helvetica", 6)
