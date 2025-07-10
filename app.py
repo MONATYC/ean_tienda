@@ -144,10 +144,6 @@ def generate_labels_pdf(products, copies_per_product=24):
     img_max_w = cell_w * 0.9
     img_max_h = cell_h * 0.50  # deja sitio para texto
 
-    # Ajuste: el combo código EAN + código de barras será el doble de ancho
-    combo_w = cell_w * 2 * 0.9  # 2 celdas de ancho, con padding
-    combo_h = img_max_h  # altura igual que antes
-
     for product_name in products:
         ean_code = st.session_state.df_inventory.loc[
             st.session_state.df_inventory["Producto"] == product_name, "EAN"
@@ -160,20 +156,18 @@ def generate_labels_pdf(products, copies_per_product=24):
             buffer.seek(0)
             barcode_img = ImageReader(buffer)
 
-            # Dibujar 12 combos por página (cada combo ocupa 2 celdas de ancho)
-            combos_per_row = cols // 2  # 1 combo = 2 celdas
-            combos_per_page = combos_per_row * rows
-            combo_count = 0
+            # Dibujar 24 copias en la página
             for row in range(rows):
-                for combo in range(combos_per_row):
-                    x0 = margin_x + combo * 2 * cell_w
+                for col in range(cols):
+                    # Coordenadas de la esquina inferior‑izquierda de la celda
+                    x0 = margin_x + col * cell_w
                     y0 = height - margin_y - (row + 1) * cell_h
 
-                    # Centrar la imagen dentro del combo
-                    img_w = combo_w
-                    img_h = combo_h
-                    img_x = x0 + (2 * cell_w - img_w) / 2
-                    img_y = y0 + (cell_h - img_h) / 2 + 6 * mm
+                    # Centrar la imagen dentro de la celda
+                    img_w = img_max_w
+                    img_h = img_max_h
+                    img_x = x0 + (cell_w - img_w) / 2
+                    img_y = y0 + (cell_h - img_h) / 2 + 6 * mm  # ligeramente arriba
 
                     c.drawImage(
                         barcode_img,
@@ -188,15 +182,9 @@ def generate_labels_pdf(products, copies_per_product=24):
                     # Texto bajo el código
                     text_y = img_y - 4 * mm
                     c.setFont("Helvetica-Bold", 6)
-                    c.drawCentredString(x0 + cell_w, text_y, product_name)
+                    c.drawCentredString(x0 + cell_w / 2, text_y, product_name)
                     c.setFont("Helvetica", 6)
-                    c.drawCentredString(x0 + cell_w, text_y - 3.5 * mm, ean_code)
-
-                    combo_count += 1
-                    if combo_count >= copies_per_product:
-                        break
-                if combo_count >= copies_per_product:
-                    break
+                    c.drawCentredString(x0 + cell_w / 2, text_y - 3.5 * mm, ean_code)
             c.showPage()
         except Exception as e:
             st.error(f"Error al generar código de barras para {ean_code}: {e}")
