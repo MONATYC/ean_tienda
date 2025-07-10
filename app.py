@@ -251,7 +251,7 @@ def render_pdf_buffer(product_list):
                 y0 = height - margin_y - (row + 1) * cell_h
 
                 # Desplazamiento hacia arriba
-                y_offset = 6 * mm
+                y_offset = 4 * mm
 
                 img_x = x0 + (cell_w - scaled_w) / 2
                 img_y = y0 + cell_h - v_margin - scaled_h + y_offset
