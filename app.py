@@ -16,14 +16,19 @@ if "df_inventory" not in st.session_state:
 
 # Función para generar EAN secuencial (MOVED UP)
 def generate_next_ean(last_ean):
-    prefix = last_ean[:8]  # Mantener los primeros 8 dígitos del prefijo
-    numeric_part = int(last_ean[8:-1]) + 1  # Incrementar la secuencia
+    """Generate the next sequential EAN-13 code."""
+
+    # Ensure the incoming value is treated as a 13 digit string
+    last_ean_str = str(int(float(last_ean))).zfill(13)
+
+    prefix = last_ean_str[:8]  # Mantener los primeros 8 dígitos del prefijo
+    numeric_part = int(last_ean_str[8:-1]) + 1  # Incrementar la secuencia
     new_base = f"{prefix}{numeric_part:05d}"  # Formato de 5 dígitos
+
     # Calcular dígito de control con la librería
     ean_cls = barcode.get_barcode_class("ean13")
     ean = ean_cls(new_base)
-    full_ean = ean.get_fullcode()
-    return full_ean
+    return ean.get_fullcode()
 
 
 # Función para generar PDF con ReportLab (MOVED UP)
@@ -179,7 +184,8 @@ st.header("1. Carga de inventario")
 uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 if uploaded_file:
     try:
-        df = pd.read_excel(uploaded_file, sheet_name="Hoja1")
+        # Read all columns as strings to avoid numeric conversion of EAN codes
+        df = pd.read_excel(uploaded_file, sheet_name="Hoja1", dtype=str)
         df.columns = [c.strip() for c in df.columns]
         # Renombrar columnas si es necesario para asegurar consistencia
         col_map = {}
@@ -194,6 +200,8 @@ if uploaded_file:
             raise ValueError(
                 f"Columnas incorrectas. Se encontraron: {df.columns.tolist()}"
             )
+        # Normalizar la columna EAN como cadena de 13 dígitos
+        df["EAN"] = df["EAN"].astype(str).str.replace(".0", "", regex=False).str.zfill(13)
         st.session_state.df_inventory = df
         st.success("Inventario cargado correctamente")
         st.dataframe(df)
