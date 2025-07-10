@@ -114,110 +114,6 @@ def generate_next_ean(df: pd.DataFrame) -> str:
     return ean.get_fullcode()  # Devuelve los 13 dígitos
 
 
-def generate_labels_pdf(products, copies_per_product=24):
-    """
-    Crea un PDF (A4) con una parrilla de 24 etiquetas ―3 columnas x 8 filas―
-    para cada producto seleccionado. Cada celda incluye:
-        • imagen del código de barras
-        • nombre del producto
-    (El texto con los 13 dígitos ya aparece dentro de la imagen generada).
-    """
-    if not products:
-        st.warning("No hay productos seleccionados.")
-        return
-
-    os.makedirs("outputs", exist_ok=True)
-    pdf_path = "outputs/etiquetas.pdf"
-    c = canvas.Canvas(pdf_path, pagesize=A4)
-    width, height = A4
-
-    # Parrilla: márgenes y tamaños de celda
-    # Margen exterior: 0.8 cm lateral, 1.2 cm arriba/abajo
-    margin_x = 8 * mm
-    margin_y = 12 * mm
-
-    cols = 3
-    rows = 8
-
-    # Cada rectángulo (etiqueta) mide 6.5 cm x 3.5 cm
-    cell_w = 65 * mm
-    cell_h = 35 * mm
-
-    # Margen interno horizontal y vertical para imagen y texto
-    h_margin = 5 * mm  # 0,5 cm a cada lado
-    v_margin = 4 * mm  # margen vertical interno
-
-    # Ahora solo hay UNA línea de texto ⇒ reservamos ≈ 3,5 mm
-    text_block_h = 3.5 * mm
-
-    # Dimensiones máximas para la imagen del código de barras
-    img_max_w = cell_w - 2 * h_margin
-    img_max_h = cell_h - 2 * v_margin - text_block_h
-
-    # Writer-options para hacer el código más alto (sin variar la fuente)
-    writer_opts = {
-        "module_width": 0.70,  # barras ligeramente más anchas
-        "module_height": 25.0,  # barras más altas
-        "quiet_zone": 2.0,  # margen blanco reducido
-        "font_size": 15,  # tamaño de texto de los dígitos
-        "text_distance": 6.0,
-        "dpi": 400,
-    }
-
-    # --- NO DIBUJAR NINGUNA LÍNEA DE MÁRGENES NI GRILLA ---
-
-    for product_name in products:
-        ean_code = st.session_state.df_inventory.loc[
-            st.session_state.df_inventory["Producto"] == product_name, "EAN"
-        ].iloc[0]
-
-        try:
-            barcode_obj = EAN13NoChecksum(ean_code, writer=ImageWriter())
-            buffer = BytesIO()
-            # pasamos las opciones al escribir para obtener un PNG más grande
-            barcode_obj.write(buffer, options=writer_opts)
-            buffer.seek(0)
-            barcode_img = ImageReader(buffer)
-
-            # Ajustar tamaño en la celda manteniendo proporciones
-            orig_w, orig_h = barcode_img.getSize()
-            scale = min(img_max_w / orig_w, img_max_h / orig_h)
-            scaled_w = orig_w * scale
-            scaled_h = orig_h * scale
-
-            # Dibujar 24 copias (3×8)
-            for row in range(rows):
-                for col in range(cols):
-                    x0 = margin_x + col * cell_w
-                    y0 = height - margin_y - (row + 1) * cell_h
-
-                    # Imagen arriba, texto debajo y más pegado (1 mm)
-                    img_x = x0 + (cell_w - scaled_w) / 2
-                    img_y = y0 + cell_h - v_margin - scaled_h
-                    text_y = img_y - 1 * mm  # 1 mm separación
-
-                    # Dibujar imagen
-                    c.drawImage(
-                        barcode_img,
-                        img_x,
-                        img_y,
-                        width=scaled_w,
-                        height=scaled_h,
-                        preserveAspectRatio=True,
-                        mask="auto",
-                    )
-
-                    # Nombre del producto (centrado, fuente más grande)
-                    c.setFont("Helvetica-Bold", 9)
-                    c.drawCentredString(x0 + cell_w / 2, text_y, product_name)
-            c.showPage()
-        except Exception as e:
-            st.error(f"Error al generar código de barras para {ean_code}: {e}")
-
-    c.save()
-    # No mostrar botón de descarga aquí, la descarga se gestiona desde el botón principal
-
-
 # -----------------------------------
 #  UI: 1. CARGA DE INVENTARIO
 # -----------------------------------
@@ -303,78 +199,93 @@ selected_products = st.multiselect(
     max_selections=10,
 )
 
-if st.button("Generar y descargar etiquetas PDF"):
-    # Genera el PDF en memoria y lo descarga directamente
-    if not selected_products:
-        st.warning("Selecciona al menos un producto para imprimir.")
-    else:
-        # Generar el PDF en un buffer en memoria
-        buffer = BytesIO()
-        # Copia de la función, pero escribiendo en buffer en vez de archivo
-        width, height = A4
-        margin_x = 8 * mm
-        margin_y = 12 * mm
-        cols = 3
-        rows = 8
-        cell_w = 65 * mm
-        cell_h = 35 * mm
-        h_margin = 5 * mm
-        v_margin = 4 * mm
-        text_block_h = 3.5 * mm
-        img_max_w = cell_w - 2 * h_margin
-        img_max_h = cell_h - 2 * v_margin - text_block_h
-        writer_opts = {
-            "module_width": 0.70,
-            "module_height": 25.0,
-            "quiet_zone": 2.0,
-            "font_size": 15,
-            "text_distance": 6.0,
-            "dpi": 400,
-        }
-        c = canvas.Canvas(buffer, pagesize=A4)
-        for product_name in selected_products:
-            ean_code = st.session_state.df_inventory.loc[
-                st.session_state.df_inventory["Producto"] == product_name, "EAN"
-            ].iloc[0]
-            try:
-                barcode_obj = EAN13NoChecksum(ean_code, writer=ImageWriter())
-                img_buffer = BytesIO()
-                barcode_obj.write(img_buffer, options=writer_opts)
-                img_buffer.seek(0)
-                barcode_img = ImageReader(img_buffer)
-                orig_w, orig_h = barcode_img.getSize()
-                scale = min(img_max_w / orig_w, img_max_h / orig_h)
-                scaled_w = orig_w * scale
-                scaled_h = orig_h * scale
-                for row in range(rows):
-                    for col in range(cols):
-                        x0 = margin_x + col * cell_w
-                        y0 = height - margin_y - (row + 1) * cell_h
-                        img_x = x0 + (cell_w - scaled_w) / 2
-                        img_y = y0 + cell_h - v_margin - scaled_h
-                        text_y = img_y - 1 * mm
-                        c.drawImage(
-                            barcode_img,
-                            img_x,
-                            img_y,
-                            width=scaled_w,
-                            height=scaled_h,
-                            preserveAspectRatio=True,
-                            mask="auto",
-                        )
-                        c.setFont("Helvetica-Bold", 9)
-                        c.drawCentredString(x0 + cell_w / 2, text_y, product_name)
-                c.showPage()
-            except Exception as e:
-                st.error(f"Error al generar código de barras para {ean_code}: {e}")
-        c.save()
-        buffer.seek(0)
-        st.download_button(
-            label="Descargar PDF de Etiquetas",
-            data=buffer.getvalue(),
-            file_name="etiquetas_MONA.pdf",
-            mime="application/pdf",
-        )
+
+def render_pdf_buffer(product_list):
+    if not product_list:
+        return None
+
+    buffer = BytesIO()
+    width, height = A4
+
+    margin_x = 8 * mm
+    margin_y = 12 * mm
+    cols = 3
+    rows = 8
+    cell_w = 65 * mm
+    cell_h = 35 * mm
+    h_margin = 5 * mm
+    v_margin = 4 * mm
+    text_block_h = 3.5 * mm
+    img_max_w = cell_w - 2 * h_margin
+    img_max_h = cell_h - 2 * v_margin - text_block_h
+
+    writer_opts = {
+        "module_width": 0.70,
+        "module_height": 25.0,
+        "quiet_zone": 2.0,
+        "font_size": 15,
+        "text_distance": 6.0,
+        "dpi": 400,
+    }
+
+    c = canvas.Canvas(buffer, pagesize=A4)
+    for product_name in product_list:
+        ean_code = st.session_state.df_inventory.loc[
+            st.session_state.df_inventory["Producto"] == product_name, "EAN"
+        ].iloc[0]
+
+        barcode_obj = EAN13NoChecksum(ean_code, writer=ImageWriter())
+        img_buffer = BytesIO()
+        barcode_obj.write(img_buffer, options=writer_opts)
+        img_buffer.seek(0)
+        barcode_img = ImageReader(img_buffer)
+
+        orig_w, orig_h = barcode_img.getSize()
+        scale = min(img_max_w / orig_w, img_max_h / orig_h)
+        scaled_w = orig_w * scale
+        scaled_h = orig_h * scale
+
+        for row in range(rows):
+            for col in range(cols):
+                x0 = margin_x + col * cell_w
+                y0 = height - margin_y - (row + 1) * cell_h
+
+                img_x = x0 + (cell_w - scaled_w) / 2
+                img_y = y0 + cell_h - v_margin - scaled_h
+                text_y = img_y - 1 * mm
+
+                c.drawImage(
+                    barcode_img,
+                    img_x,
+                    img_y,
+                    width=scaled_w,
+                    height=scaled_h,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
+
+                c.setFont("Helvetica-Bold", 9)
+                c.drawCentredString(x0 + cell_w / 2, text_y, product_name)
+        c.showPage()
+
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+
+if selected_products:
+    pdf_buffer = render_pdf_buffer(selected_products)
+
+    st.download_button(
+        label="Generar y descargar etiquetas PDF",
+        data=pdf_buffer.getvalue(),
+        file_name="etiquetas_MONA.pdf",
+        mime="application/pdf",
+        key="download_etiquetas",
+    )
+else:
+    st.warning("Selecciona al menos un producto para imprimir.")
+
 
 # -----------------------------------
 #  DESCARGA INVENTARIO COMPLETO
