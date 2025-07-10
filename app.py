@@ -209,7 +209,7 @@ def render_pdf_buffer(product_list):
 
     margin_x = 8 * mm
     margin_y = 12 * mm
-    extra_bottom_margin = 3 * mm  # Añade 3mm de margen blanco inferior
+    extra_bottom_margin = -3 * mm  # Añade 3mm de margen blanco inferior
     cols = 3
     rows = 8
     cell_w = 65 * mm
