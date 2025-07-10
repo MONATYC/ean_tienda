@@ -164,15 +164,7 @@ def generate_labels_pdf(products, copies_per_product=24):
         "dpi": 400,
     }
 
-    # --- DIBUJAR SOLO LOS MÁRGENES EXTERIORES ---
-    c.saveState()
-    c.setStrokeColorRGB(0.2, 0.2, 0.2)
-    c.setLineWidth(1)
-    c.line(margin_x, margin_y, margin_x, height - margin_y)  # izq
-    c.line(width - margin_x, margin_y, width - margin_x, height - margin_y)  # dcha
-    c.line(margin_x, height - margin_y, width - margin_x, height - margin_y)  # sup
-    c.line(margin_x, margin_y, width - margin_x, margin_y)  # inf
-    c.restoreState()
+    # --- NO DIBUJAR NINGUNA LÍNEA DE MÁRGENES NI GRILLA ---
 
     for product_name in products:
         ean_code = st.session_state.df_inventory.loc[
