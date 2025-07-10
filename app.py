@@ -1,6 +1,49 @@
 import streamlit as st
 import pandas as pd
 import barcode
+from barcode.ean import IllegalCharacterError, NumberOfDigitsError, _ean
+from barcode.base import Barcode
+from barcode.writer import ImageWriter
+
+
+class EAN13NoChecksum(Barcode):
+    """Barcode class that keeps the provided 13 digits without recalculating the checksum."""
+
+    name = "EAN13-NoChecksum"
+    digits = 13
+
+    def __init__(self, ean: str, writer=None, guardbar: bool = False) -> None:
+        if not ean.isdigit():
+            raise IllegalCharacterError("EAN code can only contain numbers.")
+        if len(ean) != self.digits:
+            raise NumberOfDigitsError(
+                f"EAN must have {self.digits} digits, not {len(ean)}."
+            )
+        self.ean = ean
+        self.guardbar = guardbar
+        if guardbar:
+            self.EDGE = _ean.EDGE.replace("1", "G")
+            self.MIDDLE = _ean.MIDDLE.replace("1", "G")
+        else:
+            self.EDGE = _ean.EDGE
+            self.MIDDLE = _ean.MIDDLE
+        self.writer = writer or ImageWriter()
+
+    def get_fullcode(self) -> str:
+        if self.guardbar:
+            return self.ean[0] + " " + self.ean[1:7] + " " + self.ean[7:] + " >"
+        return self.ean
+
+    def build(self):
+        code = self.EDGE[:]
+        pattern = _ean.LEFT_PATTERN[int(self.ean[0])]
+        for i, number in enumerate(self.ean[1:7]):
+            code += _ean.CODES[pattern[i]][int(number)]
+        code += self.MIDDLE
+        for number in self.ean[7:]:
+            code += _ean.CODES["C"][int(number)]
+        code += self.EDGE
+        return [code]
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -50,8 +93,7 @@ def generate_labels_pdf(products):
             ]["EAN"].iloc[0]
         )
         try:
-            ean_cls = barcode.get_barcode_class("ean13")
-            EAN = ean_cls(ean_code, writer=barcode.writer.ImageWriter())
+            EAN = EAN13NoChecksum(ean_code, writer=ImageWriter())
             buffer = BytesIO()
             EAN.write(buffer)
             buffer.seek(0)
