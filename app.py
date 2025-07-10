@@ -220,12 +220,12 @@ def render_pdf_buffer(product_list):
     img_max_h = cell_h - 2 * v_margin - text_block_h
 
     writer_opts = {
-        "module_width": 0.70,
-        "module_height": 25.0,
-        "quiet_zone": 2.0,
-        "font_size": 15,
-        "text_distance": 6.0,
-        "dpi": 400,
+        "module_width": 0.70,  # ancho de módulo en mm
+        "module_height": 25.0,  # altura del código de barras en mm
+        "quiet_zone": 2.0,  # zona de silencio en mm
+        "font_size": 15,  # tamaño de fuente para el texto
+        "text_distance": 6.0,  # distancia entre el código y el texto
+        "dpi": 400,  # resolución en DPI
     }
 
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -250,9 +250,12 @@ def render_pdf_buffer(product_list):
                 x0 = margin_x + col * cell_w
                 y0 = height - margin_y - (row + 1) * cell_h
 
+                # Desplazamiento hacia arriba
+                y_offset = 3 * mm
+
                 img_x = x0 + (cell_w - scaled_w) / 2
-                img_y = y0 + cell_h - v_margin - scaled_h
-                text_y = img_y - 1 * mm
+                img_y = y0 + cell_h - v_margin - scaled_h + y_offset
+                text_y = img_y - 1 * mm + y_offset
 
                 c.drawImage(
                     barcode_img,
