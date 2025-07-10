@@ -62,7 +62,7 @@ def generate_labels_pdf():
                 # Find the EAN for the product from the inventory DataFrame
                 ean = st.session_state.df_inventory[
                     st.session_state.df_inventory["Producto"] == product_name
-                ]["Código EAN-13"].iloc[0]
+                ]["Codigo_EAN-13"].iloc[0]
                 for _ in range(qty):
                     labels_to_print.append({"product": product_name, "ean": ean})
 
@@ -180,25 +180,29 @@ uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file, sheet_name="Hoja1")
+        df.columns = [c.strip() for c in df.columns]
+        required_cols = {"Producto", "Codigo_EAN-13"}
+        if not required_cols.issubset(df.columns):
+            raise ValueError("Columnas incorrectas")
         st.session_state.df_inventory = df
         st.success("Inventario cargado correctamente")
         st.dataframe(df)
-    except:
+    except Exception:
         st.error(
-            "Error al leer el archivo. Asegúrate de que contenga la hoja 'Hoja1' con columnas 'Producto' y 'Código EAN-13'"
+            "Error al leer el archivo. Asegúrate de que contenga la hoja 'Hoja1' con columnas 'Producto' y 'Codigo_EAN-13'"
         )
 
 # Formulario para nuevos productos
 st.header("2. Añadir producto")
 with st.form("new_product_form"):
-    product_name = st.text_input("Nombre del producto (ej: 'Camiseta roja M')")
-    product_type = st.selectbox("Tipo de producto", ["Camiseta"])  # Expandible
+    product_type = st.selectbox("Tipo de producto", ["Samarreta"])  # Expandible
+    color = st.text_input("Color")
     size = st.selectbox("Talla", ["XS", "S", "M", "L", "XL"])
-    color = st.selectbox("Color", ["Negra", "Azul"])
+    product_name = f"{product_type} {color} - {size}"
 
     # Generar nuevo EAN
     if not st.session_state.df_inventory.empty:
-        last_ean = st.session_state.df_inventory["Código EAN-13"].iloc[-1]
+        last_ean = st.session_state.df_inventory["Codigo_EAN-13"].iloc[-1]
         new_ean = generate_next_ean(last_ean)
     else:
         new_ean = "8437000000001"  # Valor inicial por defecto
@@ -206,8 +210,8 @@ with st.form("new_product_form"):
     submitted = st.form_submit_button("Añadir producto")
     if submitted:
         new_row = {
-            "Producto": f"{product_name} - {size} {color}",
-            "Código EAN-13": new_ean,
+            "Producto": product_name,
+            "Codigo_EAN-13": new_ean,
         }
         st.session_state.df_inventory = pd.concat(
             [st.session_state.df_inventory, pd.DataFrame([new_row])], ignore_index=True
