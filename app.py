@@ -228,8 +228,8 @@ def generate_labels_pdf(products, copies_per_product=24):
                         mask="auto",
                     )
 
-                    # Nombre del producto (centrado)
-                    c.setFont("Helvetica-Bold", 6)
+                    # Nombre del producto (centrado, fuente más grande)
+                    c.setFont("Helvetica-Bold", 9)
                     c.drawCentredString(x0 + cell_w / 2, text_y, product_name)
             c.showPage()
         except Exception as e:
