@@ -215,15 +215,7 @@ def generate_labels_pdf(products, copies_per_product=24):
             st.error(f"Error al generar código de barras para {ean_code}: {e}")
 
     c.save()
-    # Descargar automáticamente el PDF generado
-    with open(pdf_path, "rb") as f:
-        pdf_bytes = f.read()
-    st.download_button(
-        label="Descargar PDF de Etiquetas",
-        data=pdf_bytes,
-        file_name="etiquetas_MONA.pdf",
-        mime="application/pdf",
-    )
+    # No mostrar botón de descarga aquí, la descarga se gestiona desde el botón principal
 
 
 # -----------------------------------
@@ -312,8 +304,18 @@ selected_products = st.multiselect(
 )
 
 if st.button("Generar etiquetas PDF"):
-    # Genera y descarga el PDF directamente
+    # Genera el PDF y lo descarga directamente
+    os.makedirs("outputs", exist_ok=True)
+    pdf_path = "outputs/etiquetas.pdf"
     generate_labels_pdf(selected_products)
+    with open(pdf_path, "rb") as f:
+        pdf_bytes = f.read()
+    st.download_button(
+        label="Descargar PDF de Etiquetas",
+        data=pdf_bytes,
+        file_name="etiquetas_MONA.pdf",
+        mime="application/pdf",
+    )
 
 # -----------------------------------
 #  DESCARGA INVENTARIO COMPLETO
