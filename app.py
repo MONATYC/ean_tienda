@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import python_barcode as barcode
+import barcode
 from PIL import Image
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -20,7 +20,9 @@ def generate_next_ean(last_ean):
     numeric_part = int(last_ean[8:-1]) + 1  # Incrementar la secuencia
     new_base = f"{prefix}{numeric_part:05d}"  # Formato de 5 dígitos
     # Calcular dígito de control con la librería
-    full_ean = barcode.ean13(new_base, output="").get_fullcode()
+    ean_cls = barcode.get_barcode_class("ean13")
+    ean = ean_cls(new_base)
+    full_ean = ean.get_fullcode()
     return full_ean
 
 
@@ -89,9 +91,8 @@ def generate_labels_pdf():
 
                     # Generate barcode image
                     try:
-                        EAN = barcode.ean13(
-                            ean_code, writer=barcode.writer.ImageWriter()
-                        )
+                        ean_cls = barcode.get_barcode_class("ean13")
+                        EAN = ean_cls(ean_code, writer=barcode.writer.ImageWriter())
                         # Save barcode to a BytesIO object to avoid disk I/O
                         from io import BytesIO
 
