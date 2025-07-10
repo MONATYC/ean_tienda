@@ -1,3 +1,5 @@
+# mona_ean_labels.py
+
 import streamlit as st
 import pandas as pd
 import barcode
@@ -5,9 +7,24 @@ from barcode.ean import IllegalCharacterError, NumberOfDigitsError, _ean
 from barcode.base import Barcode
 from barcode.writer import ImageWriter
 
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
+from io import BytesIO
+import os
+from datetime import datetime
 
+
+# ------------------------
+#  CUSTOM BARCODE CLASS
+# ------------------------
 class EAN13NoChecksum(Barcode):
-    """Barcode class that keeps the provided 13 digits without recalculating the checksum."""
+    """
+    Barcode class that keeps the provided 13 digits unchanged.
+    This lets us re‑use already‑calculated EANs coming from the inventory
+    without forcing the python‑barcode library to recalculate the checksum.
+    """
 
     name = "EAN13-NoChecksum"
     digits = 13
@@ -30,8 +47,6 @@ class EAN13NoChecksum(Barcode):
         self.writer = writer or ImageWriter()
 
     def get_fullcode(self) -> str:
-        if self.guardbar:
-            return self.ean[0] + " " + self.ean[1:7] + " " + self.ean[7:] + " >"
         return self.ean
 
     def build(self):
@@ -44,75 +59,135 @@ class EAN13NoChecksum(Barcode):
             code += _ean.CODES["C"][int(number)]
         code += self.EDGE
         return [code]
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.lib.utils import ImageReader
-from io import BytesIO
-import os
-from datetime import datetime
 
-# Configuración inicial
+
+# -----------------------------------
+#  STREAMLIT CONFIG
+# -----------------------------------
 st.set_page_config(layout="wide", page_title="Gestor EAN - MONA")
 
-# Estado de sesión
+# -----------------------------------
+#  SESSION STATE INITIALIZATION
+# -----------------------------------
 if "df_inventory" not in st.session_state:
     st.session_state.df_inventory = pd.DataFrame(columns=["Producto", "EAN"])
+
 if "uploaded_filename" not in st.session_state:
     st.session_state.uploaded_filename = None
 
+# -----------------------------------
+#  FUNCTIONS
+# -----------------------------------
 
-# Función para generar EAN secuencial (MOVED UP)
-def generate_next_ean(last_ean):
-    """Generate the next sequential EAN-13 code."""
+COUNTRY_PREFIX = "84370000"  # 8‑digits : 84 (ES) + 370000 (organización)
 
-    # Ensure the incoming value is treated as a 13 digit string
-    last_ean_str = str(int(float(last_ean))).zfill(13)
 
-    prefix = last_ean_str[:8]  # Mantener los primeros 8 dígitos del prefijo
-    numeric_part = int(last_ean_str[8:-1]) + 1  # Incrementar la secuencia
-    new_base = f"{prefix}{numeric_part:05d}"  # Formato de 5 dígitos
+def _next_sequential_number(df: pd.DataFrame) -> int:
+    """
+    Devuelve el siguiente número secuencial (4 dígitos) mirando
+    todos los EAN almacenados en el inventario.
+    """
+    if df.empty:
+        return 1
+    seq_max = (
+        df["EAN"]
+        .str.slice(8, 12)  # posiciones 9‑12 => parte secuencial de 4 dígitos
+        .astype(int)
+        .max()
+    )
+    return seq_max + 1
 
-    # Calcular dígito de control con la librería
+
+def generate_next_ean(df: pd.DataFrame) -> str:
+    """
+    Genera el siguiente código EAN‑13 disponible.
+    Mantiene un prefijo de 8 dígitos y usa 4 para la parte secuencial.
+    El 13º dígito (checksum) lo calcula automáticamente la librería.
+    """
+    seq = _next_sequential_number(df)
+    if seq > 9999:
+        raise ValueError(
+            "Se agotó el rango de EAN disponible para el prefijo definido."
+        )
+
+    base_12 = f"{COUNTRY_PREFIX}{seq:04d}"  # 12 dígitos (sin checksum)
     ean_cls = barcode.get_barcode_class("ean13")
-    ean = ean_cls(new_base)
-    return ean.get_fullcode()
+    ean = ean_cls(base_12)
+    return ean.get_fullcode()  # Devuelve los 13 dígitos
 
 
-# Función para generar PDF con ReportLab (MOVED UP)
-def generate_labels_pdf(products):
+def generate_labels_pdf(products, copies_per_product=24):
+    """
+    Crea un PDF (A4) con una parrilla de 24 etiquetas ―3 columnas x 8 filas―
+    para cada producto seleccionado. Cada celda incluye:
+        • imagen del código de barras
+        • nombre del producto
+        • código EAN (texto)
+    """
+    if not products:
+        st.warning("No hay productos seleccionados.")
+        return
+
     os.makedirs("outputs", exist_ok=True)
     pdf_path = "outputs/etiquetas.pdf"
     c = canvas.Canvas(pdf_path, pagesize=A4)
     width, height = A4
 
-    for idx, product_name in enumerate(products):
-        ean_code = (
-            st.session_state.df_inventory[
-                st.session_state.df_inventory["Producto"] == product_name
-            ]["EAN"].iloc[0]
-        )
+    # Parrilla: márgenes y tamaños de celda
+    margin_x = 10 * mm
+    margin_y = 10 * mm
+    cols = 3
+    rows = 8
+    cell_w = (width - 2 * margin_x) / cols
+    cell_h = (height - 2 * margin_y) / rows
+
+    img_max_w = cell_w * 0.9
+    img_max_h = cell_h * 0.50  # deja sitio para texto
+
+    for product_name in products:
+        ean_code = st.session_state.df_inventory.loc[
+            st.session_state.df_inventory["Producto"] == product_name, "EAN"
+        ].iloc[0]
+
         try:
-            EAN = EAN13NoChecksum(ean_code, writer=ImageWriter())
+            barcode_obj = EAN13NoChecksum(ean_code, writer=ImageWriter())
             buffer = BytesIO()
-            EAN.write(buffer)
+            barcode_obj.write(buffer)
             buffer.seek(0)
             barcode_img = ImageReader(buffer)
 
-            img_w = 80 * mm
-            img_h = 30 * mm
-            x = (width - img_w) / 2
-            y = (height - img_h) / 2
+            # Dibujar 24 copias en la página
+            for row in range(rows):
+                for col in range(cols):
+                    # Coordenadas de la esquina inferior‑izquierda de la celda
+                    x0 = margin_x + col * cell_w
+                    y0 = height - margin_y - (row + 1) * cell_h
 
-            c.drawImage(barcode_img, x, y, width=img_w, height=img_h)
-            c.setFont("Helvetica-Bold", 12)
-            c.drawCentredString(width / 2, y - 20, product_name)
-            c.setFont("Helvetica", 10)
-            c.drawCentredString(width / 2, y - 35, ean_code)
+                    # Centrar la imagen dentro de la celda
+                    img_w = img_max_w
+                    img_h = img_max_h
+                    img_x = x0 + (cell_w - img_w) / 2
+                    img_y = y0 + (cell_h - img_h) / 2 + 6 * mm  # ligeramente arriba
+
+                    c.drawImage(
+                        barcode_img,
+                        img_x,
+                        img_y,
+                        width=img_w,
+                        height=img_h,
+                        preserveAspectRatio=True,
+                        mask="auto",
+                    )
+
+                    # Texto bajo el código
+                    text_y = img_y - 4 * mm
+                    c.setFont("Helvetica-Bold", 6)
+                    c.drawCentredString(x0 + cell_w / 2, text_y, product_name)
+                    c.setFont("Helvetica", 6)
+                    c.drawCentredString(x0 + cell_w / 2, text_y - 3.5 * mm, ean_code)
+            c.showPage()
         except Exception as e:
             st.error(f"Error al generar código de barras para {ean_code}: {e}")
-        if idx < len(products) - 1:
-            c.showPage()
 
     c.save()
     st.success(f"PDF de etiquetas generado en: {pdf_path}")
@@ -125,91 +200,110 @@ def generate_labels_pdf(products):
         )
 
 
-# Sección de carga de archivo Excel
+# -----------------------------------
+#  UI: 1. CARGA DE INVENTARIO
+# -----------------------------------
 st.header("1. Carga de inventario")
 uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
+
 if uploaded_file:
     try:
-        # Read all columns as strings to avoid numeric conversion of EAN codes
         df = pd.read_excel(uploaded_file, sheet_name="Hoja1", dtype=str)
         df.columns = [c.strip() for c in df.columns]
-        # Renombrar columnas si es necesario para asegurar consistencia
+
+        # Renombrar columnas
         col_map = {}
         for col in df.columns:
-            if col.lower() == "producto":
+            col_lower = col.lower()
+            if col_lower == "producto":
                 col_map[col] = "Producto"
-            elif col.lower() in ["ean", "EAN", "codigo ean-13"]:
+            elif col_lower in {"ean", "codigo ean-13"}:
                 col_map[col] = "EAN"
         df = df.rename(columns=col_map)
-        required_cols = {"Producto", "EAN"}
-        if not required_cols.issubset(df.columns):
+
+        if not {"Producto", "EAN"}.issubset(df.columns):
             raise ValueError(
-                f"Columnas incorrectas. Se encontraron: {df.columns.tolist()}"
+                "El archivo debe contener las columnas 'Producto' y 'EAN'."
             )
-        # Normalizar la columna EAN como cadena de 13 dígitos
-        df["EAN"] = df["EAN"].astype(str).str.replace(".0", "", regex=False).str.zfill(13)
-        st.session_state.df_inventory = df
-        st.session_state.uploaded_filename = uploaded_file.name
-        st.success("Inventario cargado correctamente")
-        st.dataframe(df.head())
-        st.caption("Se muestran solo las primeras 5 líneas")
-    except Exception as e:
-        st.error(
-            f"Error al leer el archivo. Asegúrate de que contenga la hoja 'Hoja1' con columnas 'Producto' y 'EAN'. Detalle: {e}"
+
+        # Normalizar EAN
+        df["EAN"] = (
+            df["EAN"].astype(str).str.replace(".0", "", regex=False).str.zfill(13)
         )
 
-# Formulario para nuevos productos
+        st.session_state.df_inventory = df.drop_duplicates(subset=["Producto"])
+        st.session_state.uploaded_filename = uploaded_file.name
+
+        st.success("Inventario cargado correctamente.")
+        st.dataframe(st.session_state.df_inventory.head())
+        st.caption("Se muestran las primeras 5 filas.")
+    except Exception as e:
+        st.error(f"Error al leer el archivo: {e}")
+
+# -----------------------------------
+#  UI: 2. AÑADIR PRODUCTO
+# -----------------------------------
 st.header("2. Añadir producto")
+
 with st.form("new_product_form"):
-    product_type = st.selectbox("Tipo de producto", ["Samarreta"])  # Expandible
+    product_type = st.selectbox("Tipo de producto", ["Samarreta"])
     color = st.text_input("Color")
     size = st.selectbox("Talla", ["XS", "S", "M", "L", "XL"])
-    product_name = f"{product_type} {color} - {size}"
 
-    # Generar nuevo EAN
-    if not st.session_state.df_inventory.empty:
-        last_ean = st.session_state.df_inventory["EAN"].iloc[-1]
-        new_ean = generate_next_ean(last_ean)
-    else:
-        new_ean = "8437000000001"  # Valor inicial por defecto
+    product_name = f"{product_type} {color} - {size}".strip()
+
+    new_ean = generate_next_ean(st.session_state.df_inventory)
+
+    st.markdown(f"**EAN sugerido:** `{new_ean}`")
 
     submitted = st.form_submit_button("Añadir producto")
+
     if submitted:
-        new_row = {
-            "Producto": product_name,
-            "EAN": new_ean,
-        }
+        if not color:
+            st.warning("Debes indicar el color.")
+            st.stop()
+
+        if product_name in st.session_state.df_inventory["Producto"].values:
+            st.error("Este producto ya existe en el inventario.")
+            st.stop()
+
+        new_row = {"Producto": product_name, "EAN": new_ean}
         st.session_state.df_inventory = pd.concat(
             [st.session_state.df_inventory, pd.DataFrame([new_row])], ignore_index=True
         )
-        st.success(f"¡Añadido con éxito! Código EAN: {new_ean}")
-        output = BytesIO()
-        st.session_state.df_inventory.to_excel(output, index=False)
-        output.seek(0)
-        st.session_state.updated_excel = output.getvalue()
-        st.success("Excel actualizado con el nuevo producto, recuerda descargarlo de nuevo.")
 
-# Sección de selección de etiquetas
+        st.success(f"¡Añadido con éxito! EAN: {new_ean}")
+
+# -----------------------------------
+#  UI: 3. SELECCIÓN DE ETIQUETAS
+# -----------------------------------
 st.header("3. Selección de etiquetas")
-selected_products_for_labels = st.multiselect(
-    "Elige productos", st.session_state.df_inventory["Producto"].tolist()
+
+selected_products = st.multiselect(
+    "Elige productos para imprimir (máx. 10)",
+    st.session_state.df_inventory["Producto"].tolist(),
+    max_selections=10,
 )
 
 if st.button("Generar etiquetas PDF"):
-    if selected_products_for_labels:
-        generate_labels_pdf(selected_products_for_labels)
-    else:
-        st.warning("Selecciona al menos un producto")
+    generate_labels_pdf(selected_products)
 
-# Botón de descarga de Excel actualizado
-if st.button("Descargar inventario actualizado"):
+# -----------------------------------
+#  DESCARGA INVENTARIO COMPLETO
+# -----------------------------------
+st.header("4. Descargar inventario actualizado")
+
+if st.button("Descargar Excel"):
     output = BytesIO()
     st.session_state.df_inventory.to_excel(output, index=False)
     output.seek(0)
-    name = st.session_state.uploaded_filename or "inventario.xlsx"
-    base, ext = os.path.splitext(name)
+
+    base, ext = os.path.splitext(
+        st.session_state.uploaded_filename or "inventario.xlsx"
+    )
     date_suffix = datetime.now().strftime("%Y%m%d")
     download_name = f"{base}_{date_suffix}{ext}"
+
     st.download_button(
         label="📥 Descargar Excel",
         data=output.getvalue(),
