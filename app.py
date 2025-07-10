@@ -151,6 +151,33 @@ def generate_labels_pdf(products, copies_per_product=24):
     # Altura disponible tras restar espacio para texto (dos líneas) y márgenes
     img_max_h = cell_h - 2 * inner_margin - (3.5 * mm + 4 * mm)
 
+    # --- DIBUJAR GRILLA DE ETIQUETAS Y MÁRGENES ---
+    # Líneas de margen exterior
+    c.setStrokeColorRGB(0.2, 0.2, 0.2)
+    c.setLineWidth(1)
+    # Margen izquierdo
+    c.line(margin_x, margin_y, margin_x, height - margin_y)
+    # Margen derecho
+    c.line(width - margin_x, margin_y, width - margin_x, height - margin_y)
+    # Margen superior
+    c.line(margin_x, height - margin_y, width - margin_x, height - margin_y)
+    # Margen inferior
+    c.line(margin_x, margin_y, width - margin_x, margin_y)
+
+    # Líneas verticales de la grilla (entre etiquetas)
+    for col in range(1, cols):
+        x = margin_x + col * cell_w
+        c.setLineWidth(0.5)
+        c.setDash(2, 2)
+        c.line(x, margin_y, x, height - margin_y)
+    # Líneas horizontales de la grilla (entre etiquetas)
+    for row in range(1, rows):
+        y = height - margin_y - row * cell_h
+        c.setLineWidth(0.5)
+        c.setDash(2, 2)
+        c.line(margin_x, y, width - margin_x, y)
+    c.setDash()  # Reset dash
+
     for product_name in products:
         ean_code = st.session_state.df_inventory.loc[
             st.session_state.df_inventory["Producto"] == product_name, "EAN"
