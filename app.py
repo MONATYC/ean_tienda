@@ -1,5 +1,3 @@
-# mona_ean_labels.py
-
 import streamlit as st
 import pandas as pd
 import barcode
@@ -206,7 +204,8 @@ def generate_labels_pdf(products, copies_per_product=24):
 st.header("1. Carga de inventario")
 uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 
-if uploaded_file:
+# Carga el inventario SOLO si el archivo es nuevo o distinto del cargado antes
+if uploaded_file and uploaded_file.name != st.session_state.get("uploaded_filename"):
     try:
         df = pd.read_excel(uploaded_file, sheet_name="Hoja1", dtype=str)
         df.columns = [c.strip() for c in df.columns]
@@ -237,6 +236,7 @@ if uploaded_file:
         st.success("Inventario cargado correctamente.")
         st.dataframe(st.session_state.df_inventory.head())
         st.caption("Se muestran las primeras 5 filas.")
+
     except Exception as e:
         st.error(f"Error al leer el archivo: {e}")
 
