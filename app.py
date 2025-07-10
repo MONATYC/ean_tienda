@@ -11,7 +11,7 @@ st.set_page_config(layout="wide", page_title="Gestor EAN - MONA")
 
 # Estado de sesión
 if "df_inventory" not in st.session_state:
-    st.session_state.df_inventory = pd.DataFrame(columns=["Producto", "Codigo_EAN-13"])
+    st.session_state.df_inventory = pd.DataFrame(columns=["Producto", "EAN"])
 
 
 # Función para generar EAN secuencial (MOVED UP)
