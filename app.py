@@ -157,10 +157,10 @@ def generate_labels_pdf(products, copies_per_product=24):
     # Writer-options para hacer el código más alto (sin variar la fuente)
     writer_opts = {
         "module_width": 0.35,  # barras ligeramente más anchas
-        "module_height": 30.0,  # barras más altas
+        "module_height": 25.0,  # barras más altas
         "quiet_zone": 2.0,  # margen blanco reducido
         "font_size": 10,  # tamaño de texto de los dígitos
-        "text_distance": 1.0,
+        "text_distance": 5.0,
         "dpi": 400,
     }
 
