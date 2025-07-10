@@ -62,7 +62,7 @@ def generate_labels_pdf():
                 # Find the EAN for the product from the inventory DataFrame
                 ean = st.session_state.df_inventory[
                     st.session_state.df_inventory["Producto"] == product_name
-                ]["Codigo_EAN-13"].iloc[0]
+                ]["EAN"].iloc[0]
                 for _ in range(qty):
                     labels_to_print.append({"product": product_name, "ean": ean})
 
@@ -186,7 +186,7 @@ if uploaded_file:
         for col in df.columns:
             if col.lower() == "producto":
                 col_map[col] = "Producto"
-            elif col.lower() in ["ean", "codigo_ean-13", "codigo ean-13"]:
+            elif col.lower() in ["ean", "EAN", "codigo ean-13"]:
                 col_map[col] = "EAN"
         df = df.rename(columns=col_map)
         required_cols = {"Producto", "EAN"}
@@ -212,7 +212,7 @@ with st.form("new_product_form"):
 
     # Generar nuevo EAN
     if not st.session_state.df_inventory.empty:
-        last_ean = st.session_state.df_inventory["Codigo_EAN-13"].iloc[-1]
+        last_ean = st.session_state.df_inventory["EAN"].iloc[-1]
         new_ean = generate_next_ean(last_ean)
     else:
         new_ean = "8437000000001"  # Valor inicial por defecto
@@ -221,7 +221,7 @@ with st.form("new_product_form"):
     if submitted:
         new_row = {
             "Producto": product_name,
-            "Codigo_EAN-13": new_ean,
+            "EAN": new_ean,
         }
         st.session_state.df_inventory = pd.concat(
             [st.session_state.df_inventory, pd.DataFrame([new_row])], ignore_index=True
