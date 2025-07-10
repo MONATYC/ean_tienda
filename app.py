@@ -181,7 +181,7 @@ if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file, sheet_name="Hoja1")
         df.columns = [c.strip() for c in df.columns]
-        required_cols = {"Producto", "Codigo_EAN-13"}
+        required_cols = {"Producto", "EAN"}
         if not required_cols.issubset(df.columns):
             raise ValueError("Columnas incorrectas")
         st.session_state.df_inventory = df
