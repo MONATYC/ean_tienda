@@ -209,6 +209,7 @@ def render_pdf_buffer(product_list):
 
     margin_x = 8 * mm
     margin_y = 12 * mm
+    extra_bottom_margin = 3 * mm  # Añade 3mm de margen blanco inferior
     cols = 3
     rows = 8
     cell_w = 65 * mm
@@ -248,7 +249,8 @@ def render_pdf_buffer(product_list):
         for row in range(rows):
             for col in range(cols):
                 x0 = margin_x + col * cell_w
-                y0 = height - margin_y - (row + 1) * cell_h
+                # Suma el extra solo al margen inferior
+                y0 = height - (margin_y + extra_bottom_margin) - (row + 1) * cell_h
 
                 img_x = x0 + (cell_w - scaled_w) / 2
                 img_y = y0 + cell_h - v_margin - scaled_h
