@@ -181,15 +181,25 @@ if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file, sheet_name="Hoja1")
         df.columns = [c.strip() for c in df.columns]
+        # Renombrar columnas si es necesario para asegurar consistencia
+        col_map = {}
+        for col in df.columns:
+            if col.lower() == "producto":
+                col_map[col] = "Producto"
+            elif col.lower() in ["ean", "codigo_ean-13", "codigo ean-13"]:
+                col_map[col] = "EAN"
+        df = df.rename(columns=col_map)
         required_cols = {"Producto", "EAN"}
         if not required_cols.issubset(df.columns):
-            raise ValueError("Columnas incorrectas")
+            raise ValueError(
+                f"Columnas incorrectas. Se encontraron: {df.columns.tolist()}"
+            )
         st.session_state.df_inventory = df
         st.success("Inventario cargado correctamente")
         st.dataframe(df)
-    except Exception:
+    except Exception as e:
         st.error(
-            "Error al leer el archivo. Asegúrate de que contenga la hoja 'Hoja1' con columnas 'Producto' y 'Codigo_EAN-13'"
+            f"Error al leer el archivo. Asegúrate de que contenga la hoja 'Hoja1' con columnas 'Producto' y 'EAN'. Detalle: {e}"
         )
 
 # Formulario para nuevos productos
