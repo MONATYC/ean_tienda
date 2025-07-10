@@ -311,8 +311,8 @@ selected_products = st.multiselect(
     max_selections=10,
 )
 
-generate_pdf = st.button("Generar etiquetas PDF")
-if generate_pdf:
+if st.button("Generar etiquetas PDF"):
+    # Genera y descarga el PDF directamente
     generate_labels_pdf(selected_products)
 
 # -----------------------------------
