@@ -224,7 +224,7 @@ def render_pdf_buffer(product_list):
         "module_height": 25.0,  # altura del código de barras en mm
         "quiet_zone": 2.0,  # zona de silencio en mm
         "font_size": 15,  # tamaño de fuente para el texto
-        "text_distance": 7.0,  # distancia entre el código y el texto
+        "text_distance": 6.0,  # distancia entre el código y el texto
         "dpi": 400,  # resolución en DPI
     }
 
@@ -250,12 +250,9 @@ def render_pdf_buffer(product_list):
                 x0 = margin_x + col * cell_w
                 y0 = height - margin_y - (row + 1) * cell_h
 
-                # Desplazamiento hacia arriba
-                y_offset = 4 * mm
-
                 img_x = x0 + (cell_w - scaled_w) / 2
-                img_y = y0 + cell_h - v_margin - scaled_h + y_offset
-                text_y = img_y - 1 * mm + y_offset
+                img_y = y0 + cell_h - v_margin - scaled_h
+                text_y = img_y - 1 * mm
 
                 c.drawImage(
                     barcode_img,
