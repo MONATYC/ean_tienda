@@ -164,7 +164,7 @@ def generate_labels_pdf(products, copies_per_product=24):
         "dpi": 400,
     }
 
-    # --- DIBUJAR GRILLA DE ETIQUETAS Y MÁRGENES ---
+    # --- DIBUJAR SOLO LOS MÁRGENES EXTERIORES ---
     c.saveState()
     c.setStrokeColorRGB(0.2, 0.2, 0.2)
     c.setLineWidth(1)
@@ -172,19 +172,6 @@ def generate_labels_pdf(products, copies_per_product=24):
     c.line(width - margin_x, margin_y, width - margin_x, height - margin_y)  # dcha
     c.line(margin_x, height - margin_y, width - margin_x, height - margin_y)  # sup
     c.line(margin_x, margin_y, width - margin_x, margin_y)  # inf
-
-    c.setStrokeColorRGB(0.5, 0.5, 0.5)
-    c.setLineWidth(0.7)
-    c.setDash(3, 2)
-    # Líneas verticales
-    for col in range(1, cols):
-        x = margin_x + col * cell_w
-        c.line(x, margin_y, x, height - margin_y)
-    # Líneas horizontales
-    for row in range(1, rows):
-        y = height - margin_y - row * cell_h
-        c.line(margin_x, y, width - margin_x, y)
-    c.setDash()
     c.restoreState()
 
     for product_name in products:
@@ -236,14 +223,15 @@ def generate_labels_pdf(products, copies_per_product=24):
             st.error(f"Error al generar código de barras para {ean_code}: {e}")
 
     c.save()
-    st.success(f"PDF de etiquetas generado en: {pdf_path}")
+    # Descargar automáticamente el PDF generado
     with open(pdf_path, "rb") as f:
-        st.download_button(
-            label="📥 Descargar PDF de Etiquetas",
-            data=f.read(),
-            file_name="etiquetas_MONA.pdf",
-            mime="application/pdf",
-        )
+        pdf_bytes = f.read()
+    st.download_button(
+        label="Descargar PDF de Etiquetas",
+        data=pdf_bytes,
+        file_name="etiquetas_MONA.pdf",
+        mime="application/pdf",
+    )
 
 
 # -----------------------------------
@@ -331,7 +319,8 @@ selected_products = st.multiselect(
     max_selections=10,
 )
 
-if st.button("Generar etiquetas PDF"):
+generate_pdf = st.button("Generar etiquetas PDF")
+if generate_pdf:
     generate_labels_pdf(selected_products)
 
 # -----------------------------------
