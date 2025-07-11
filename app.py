@@ -181,14 +181,32 @@ else:
 
         product_name = f"{product_type} {color} - {size}".strip()
 
-        # Generar EAN sugerido
-        suggested_ean = generate_next_ean(st.session_state.df_inventory)
+        # Sugerir EAN solo si hay inventario cargado
+        if not st.session_state.df_inventory.empty:
+            # Buscar el siguiente EAN compatible (no usado, con prefijo correcto)
+            used_eans = set(st.session_state.df_inventory["EAN"].values)
+            seq = _next_sequential_number(st.session_state.df_inventory)
+            # Buscar el primer EAN libre
+            while True:
+                if seq > 9999:
+                    suggested_ean = ""
+                    break
+                base_12 = f"{COUNTRY_PREFIX}{seq:04d}"
+                ean_cls = barcode.get_barcode_class("ean13")
+                ean_obj = ean_cls(base_12)
+                candidate_ean = ean_obj.get_fullcode()
+                if candidate_ean not in used_eans:
+                    suggested_ean = candidate_ean
+                    break
+                seq += 1
+        else:
+            suggested_ean = ""
 
-        # Permitir edición manual del EAN
+        # Permitir edición manual del EAN, pero sugerir uno compatible si es posible
         ean_input = st.text_input(
             "Código EAN-13",
             value=suggested_ean,
-            help="Se sugiere un EAN disponible, pero puedes introducir uno manualmente. Debe tener 13 dígitos.",
+            help="Se sugiere un EAN compatible y libre, pero puedes introducir uno manualmente. Debe tener 13 dígitos.",
             max_chars=13,
         )
 
