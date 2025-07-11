@@ -126,6 +126,23 @@ def generate_next_ean(df: pd.DataFrame) -> str:
     return ean.get_fullcode()  # Devuelve los 13 dígitos
 
 
+def get_inventory_excel():
+    """
+    Devuelve un objeto BytesIO con el inventario y el nombre de archivo
+    que incluye la fecha (ej.: inventario_20250711.xlsx).
+    """
+    output = BytesIO()
+    st.session_state.df_inventory.to_excel(output, index=False)
+    output.seek(0)
+
+    base, ext = os.path.splitext(
+        st.session_state.uploaded_filename or "inventario.xlsx"
+    )
+    date_suffix = datetime.now().strftime("%Y%m%d")
+    download_name = f"{base}_{date_suffix}{ext}"
+    return output, download_name
+
+
 # -----------------------------------
 #  UI: 1. CARGA DE INVENTARIO
 # -----------------------------------
@@ -167,7 +184,7 @@ if uploaded_file and uploaded_file.name != st.session_state.get("uploaded_filena
         st.error(f"Error al leer el archivo: {e}")
 
 # -----------------------------------
-#  UI: 2. AÑADIR PRODUCTO
+#  UI: 2. AÑADIR PRODUCTO (modificado)
 # -----------------------------------
 st.header("2. Añadir producto")
 
@@ -175,18 +192,13 @@ if st.session_state.uploaded_filename is None:
     st.warning("Primero debes cargar un archivo de inventario en el paso 1.")
 else:
     with st.form("new_product_form"):
-        product_type = st.selectbox("Tipo de producto", ["Samarreta"])
-        color = st.text_input("Color")
-        size = st.selectbox("Talla", ["XS", "S", "M", "L", "XL"])
+        # Solo un campo para el nombre de producto
+        product_name = st.text_input("Nombre de producto").strip()
 
-        product_name = f"{product_type} {color} - {size}".strip()
-
-        # Sugerir EAN solo si hay inventario cargado
+        # Sugerir EAN compatible libre
         if not st.session_state.df_inventory.empty:
-            # Buscar el siguiente EAN compatible (no usado, con prefijo correcto)
             used_eans = set(st.session_state.df_inventory["EAN"].values)
             seq = _next_sequential_number(st.session_state.df_inventory)
-            # Buscar el primer EAN libre
             while True:
                 if seq > 9999:
                     suggested_ean = ""
@@ -202,20 +214,18 @@ else:
         else:
             suggested_ean = ""
 
-        # Permitir edición manual del EAN, pero sugerir uno compatible si es posible
         ean_input = st.text_input(
             "Código EAN-13",
             value=suggested_ean,
-            help="Se sugiere un EAN compatible y libre, pero puedes introducir uno manualmente. Debe tener 13 dígitos.",
+            help="Debe tener 13 dígitos numéricos.",
             max_chars=13,
         )
 
         submitted = st.form_submit_button("Añadir producto")
 
         if submitted:
-            # Validaciones
-            if not color:
-                st.warning("Debes indicar el color.")
+            if not product_name:
+                st.warning("Debes indicar el nombre del producto.")
                 st.stop()
 
             if not ean_input.isdigit() or len(ean_input) != 13:
@@ -241,7 +251,7 @@ else:
             )
 
 # -----------------------------------
-#  UI: 3. SELECCIÓN DE ETIQUETAS
+#  UI: 3. SELECCIÓN DE ETIQUETAS (sin cambios)
 # -----------------------------------
 st.header("3. Selección de etiquetas")
 
@@ -342,24 +352,16 @@ else:
 
 
 # -----------------------------------
-#  DESCARGA INVENTARIO COMPLETO
+#  UI: 4. DESCARGAR INVENTARIO COMPLETO (modificado)
 # -----------------------------------
 st.header("4. Descargar inventario actualizado")
 
-if st.button("Descargar Excel"):
-    output = BytesIO()
-    st.session_state.df_inventory.to_excel(output, index=False)
-    output.seek(0)
+output, download_name = get_inventory_excel()  # genera el Excel al vuelo
 
-    base, ext = os.path.splitext(
-        st.session_state.uploaded_filename or "inventario.xlsx"
-    )
-    date_suffix = datetime.now().strftime("%Y%m%d")
-    download_name = f"{base}_{date_suffix}{ext}"
-
-    st.download_button(
-        label="📥 Descargar Excel",
-        data=output.getvalue(),
-        file_name=download_name,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+st.download_button(
+    label="📥 Descargar Excel",
+    data=output.getvalue(),
+    file_name=download_name,
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    key="download_excel",
+)
