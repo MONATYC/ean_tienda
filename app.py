@@ -151,7 +151,10 @@ uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 
 if uploaded_file and uploaded_file.name != st.session_state.get("uploaded_filename"):
     try:
-        df = pd.read_excel(uploaded_file, sheet_name="Hoja1", dtype=str)
+        # Leer la primera hoja independientemente del nombre
+        xl = pd.ExcelFile(uploaded_file)
+        first_sheet = xl.sheet_names[0]
+        df = xl.parse(first_sheet, dtype=str)
         df.columns = [c.strip() for c in df.columns]
 
         # Renombrar
