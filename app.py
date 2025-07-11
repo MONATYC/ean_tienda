@@ -83,17 +83,29 @@ COUNTRY_PREFIX = "84370000"  # 8-digits : 84 (ES) + 370000 (organización)
 def _next_sequential_number(df: pd.DataFrame) -> int:
     """
     Devuelve el siguiente número secuencial (4 dígitos) mirando
-    todos los EAN almacenados en el inventario.
+    los EAN del inventario que siguen el patrón del prefijo del país.
+    Ignora los EAN que no siguen el patrón (considerados antiguos o aleatorios).
     """
-    if df.empty:
+    if df.empty or "EAN" not in df.columns:
         return 1
-    seq_max = (
-        df["EAN"]
-        .str.slice(8, 12)  # posiciones 9-12 => parte secuencial de 4 dígitos
-        .astype(int)
-        .max()
-    )
-    return seq_max + 1
+
+    # Filtrar EANs que siguen el patrón: empiezan con el prefijo y tienen 13 dígitos numéricos.
+    pattern_eans = df[
+        df["EAN"].str.startswith(COUNTRY_PREFIX, na=False)
+        & (df["EAN"].str.len() == 13)
+        & (df["EAN"].str.isdigit())
+    ]
+
+    if pattern_eans.empty:
+        return 1
+
+    # Extraer la parte secuencial, convertir a número y encontrar el máximo.
+    seq_numbers = pd.to_numeric(pattern_eans["EAN"].str.slice(8, 12), errors="coerce")
+    if seq_numbers.dropna().empty:
+        return 1
+
+    seq_max = seq_numbers.max()
+    return int(seq_max) + 1
 
 
 def generate_next_ean(df: pd.DataFrame) -> str:
@@ -159,34 +171,56 @@ if uploaded_file and uploaded_file.name != st.session_state.get("uploaded_filena
 # -----------------------------------
 st.header("2. Añadir producto")
 
-with st.form("new_product_form"):
-    product_type = st.selectbox("Tipo de producto", ["Samarreta"])
-    color = st.text_input("Color")
-    size = st.selectbox("Talla", ["XS", "S", "M", "L", "XL"])
+if st.session_state.uploaded_filename is None:
+    st.warning("Primero debes cargar un archivo de inventario en el paso 1.")
+else:
+    with st.form("new_product_form"):
+        product_type = st.selectbox("Tipo de producto", ["Samarreta"])
+        color = st.text_input("Color")
+        size = st.selectbox("Talla", ["XS", "S", "M", "L", "XL"])
 
-    product_name = f"{product_type} {color} - {size}".strip()
+        product_name = f"{product_type} {color} - {size}".strip()
 
-    new_ean = generate_next_ean(st.session_state.df_inventory)
+        # Generar EAN sugerido
+        suggested_ean = generate_next_ean(st.session_state.df_inventory)
 
-    st.markdown(f"**EAN sugerido:** `{new_ean}`")
-
-    submitted = st.form_submit_button("Añadir producto")
-
-    if submitted:
-        if not color:
-            st.warning("Debes indicar el color.")
-            st.stop()
-
-        if product_name in st.session_state.df_inventory["Producto"].values:
-            st.error("Este producto ya existe en el inventario.")
-            st.stop()
-
-        new_row = {"Producto": product_name, "EAN": new_ean}
-        st.session_state.df_inventory = pd.concat(
-            [st.session_state.df_inventory, pd.DataFrame([new_row])], ignore_index=True
+        # Permitir edición manual del EAN
+        ean_input = st.text_input(
+            "Código EAN-13",
+            value=suggested_ean,
+            help="Se sugiere un EAN disponible, pero puedes introducir uno manualmente. Debe tener 13 dígitos.",
+            max_chars=13,
         )
 
-        st.success(f"¡Añadido con éxito! EAN: {new_ean}")
+        submitted = st.form_submit_button("Añadir producto")
+
+        if submitted:
+            # Validaciones
+            if not color:
+                st.warning("Debes indicar el color.")
+                st.stop()
+
+            if not ean_input.isdigit() or len(ean_input) != 13:
+                st.warning("El EAN debe contener 13 dígitos numéricos.")
+                st.stop()
+
+            if product_name in st.session_state.df_inventory["Producto"].values:
+                st.error(f"El producto '{product_name}' ya existe en el inventario.")
+                st.stop()
+
+            if ean_input in st.session_state.df_inventory["EAN"].values:
+                st.error(f"El EAN '{ean_input}' ya está asignado a otro producto.")
+                st.stop()
+
+            new_row = {"Producto": product_name, "EAN": ean_input}
+            st.session_state.df_inventory = pd.concat(
+                [st.session_state.df_inventory, pd.DataFrame([new_row])],
+                ignore_index=True,
+            )
+
+            st.success(
+                f"¡Añadido con éxito! Producto: {product_name}, EAN: {ean_input}"
+            )
 
 # -----------------------------------
 #  UI: 3. SELECCIÓN DE ETIQUETAS
