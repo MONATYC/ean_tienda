@@ -14,7 +14,7 @@ import os
 DEFAULT_FILENAME_BASE = "codigos_unicos_historial"
 CODE_LENGTH = 8  # You can adjust the length of the generated codes here
 # Page size for the generated PDF (width x height in mm)
-ENVELOPE_SIZE = (220 * mm, 110 * mm)
+ENVELOPE_SIZE = (148 * mm, 105 * mm)
 
 # --- Session State Initialization for this page ---
 if "df_unique_history" not in st.session_state:
@@ -125,8 +125,8 @@ def render_unique_codes_pdf(codes_list):
     for code in codes_list:
         c.setFont("Helvetica-Bold", 18)
         # Posicionar el código: 160 mm desde la izquierda y 70 mm desde arriba
-        x = 160 * mm
-        y = height - (85 * mm)
+        x = 10 * mm
+        y = height - (63 * mm)
         c.drawString(x, y, code)
         c.showPage()  # Nueva página para cada código
 
@@ -202,7 +202,7 @@ def main():
         )
         # Nuevo toggle para forzar prefijo manual
         use_manual_prefix = st.checkbox(
-            "Forzar manualmente hasta 4 dígitos en mayúsculas"
+            "Forzar código manualmente (4 caracteres máximo, solo letras y números)",
         )
         manual_prefix = None
         if use_manual_prefix:
