@@ -70,6 +70,15 @@ if "df_inventory" not in st.session_state:
 if "uploaded_filename" not in st.session_state:
     st.session_state.uploaded_filename = None
 
+
+def ensure_session_state():
+    """Recreate essential session state keys on every run."""
+    if "df_inventory" not in st.session_state:
+        st.session_state.df_inventory = pd.DataFrame(columns=["Producto", "EAN"])
+    if "uploaded_filename" not in st.session_state:
+        st.session_state.uploaded_filename = None
+
+
 # -----------------------------------
 #  FUNCTIONS (Keep as is)
 # -----------------------------------
@@ -137,6 +146,7 @@ def get_inventory_excel():
 #  MAIN FUNCTION WRAPPING THE UI LOGIC
 # -----------------------------------
 def main():
+    ensure_session_state()
     # All your original UI code goes here, inside this function
     # Remove the st.set_page_config line from here if it exists
 

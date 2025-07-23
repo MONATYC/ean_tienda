@@ -6,13 +6,15 @@ import random
 import string
 from io import BytesIO
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
 from datetime import datetime
 import os
 
 # --- Constants ---
 DEFAULT_FILENAME_BASE = "codigos_unicos_historial"
 CODE_LENGTH = 8  # You can adjust the length of the generated codes here
+# Page size for the generated PDF (width x height in mm)
+ENVELOPE_SIZE = (220 * mm, 110 * mm)
 
 # --- Session State Initialization for this page ---
 if "df_unique_history" not in st.session_state:
@@ -21,6 +23,17 @@ if "uploaded_unique_filename" not in st.session_state:
     st.session_state.uploaded_unique_filename = None
 if "newly_generated_codes" not in st.session_state:
     st.session_state.newly_generated_codes = []
+
+
+def ensure_session_state():
+    """Recreate essential session state keys on every run."""
+    if "df_unique_history" not in st.session_state:
+        st.session_state.df_unique_history = pd.DataFrame(columns=["Codigo_Unico"])
+    if "uploaded_unique_filename" not in st.session_state:
+        st.session_state.uploaded_unique_filename = None
+    if "newly_generated_codes" not in st.session_state:
+        st.session_state.newly_generated_codes = []
+
 
 # --- Functions for Unique Code Generation ---
 
@@ -91,8 +104,8 @@ def render_unique_codes_pdf(codes_list):
     if not codes_list:
         return None
     buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
+    c = canvas.Canvas(buffer, pagesize=ENVELOPE_SIZE)
+    width, height = ENVELOPE_SIZE
 
     for code in codes_list:
         c.setFont("Helvetica-Bold", 18)
@@ -110,6 +123,7 @@ def render_unique_codes_pdf(codes_list):
 
 # --- Main Function for Navigation ---
 def main():
+    ensure_session_state()
     """Main function to be called by the Streamlit navigation."""
     # --- UI for Unique Codes Page ---
     st.header("Códigos Únicos para Entradas")
