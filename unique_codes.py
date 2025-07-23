@@ -209,21 +209,17 @@ def main():
     if not st.session_state.newly_generated_codes:
         st.info("Genera códigos primero para poder descargar el PDF.")
     else:
-        if st.button("Generar PDF de Códigos"):
-            with st.spinner("Generando PDF..."):
-                pdf_buffer = render_unique_codes_pdf(
-                    st.session_state.newly_generated_codes
-                )
-                if pdf_buffer:
-                    st.download_button(
-                        label="📄 Descargar PDF de Códigos",
-                        data=pdf_buffer.getvalue(),
-                        file_name="codigos_unicos_entradas.pdf",
-                        mime="application/pdf",
-                        key="download_unique_codes_pdf",
-                    )
-                else:
-                    st.error("Error al generar el PDF.")
+        pdf_buffer = render_unique_codes_pdf(st.session_state.newly_generated_codes)
+        if pdf_buffer:
+            st.download_button(
+                label="📄 Generar PDF de Códigos",
+                data=pdf_buffer.getvalue(),
+                file_name="codigos_unicos_entradas.pdf",
+                mime="application/pdf",
+                key="download_unique_codes_pdf",
+            )
+        else:
+            st.error("Error al generar el PDF.")
 
 
 def unique_codes_main():
