@@ -48,9 +48,23 @@ def generate_random_code(length=CODE_LENGTH):
     return "".join(code)
 
 
-def get_unique_codes(df_history, num_codes, max_attempts=10000):
+def generate_random_code_with_prefix(prefix, length=CODE_LENGTH):
     """
-    Generates a list of unique codes not present in the history DataFrame.
+    Genera un código aleatorio con un prefijo fijo.
+    El prefijo debe tener 4 caracteres o menos (solo letras y números, en mayúsculas).
+    """
+    characters = string.ascii_uppercase + string.digits
+    remaining_length = length - len(prefix)
+    if remaining_length < 0:
+        raise ValueError("El prefijo supera la longitud permitida del código.")
+    random_part = "".join(random.choices(characters, k=remaining_length))
+    return prefix + random_part
+
+
+def get_unique_codes(df_history, num_codes, manual_prefix=None, max_attempts=10000):
+    """
+    Genera una lista de códigos únicos que no estén presentes en el DataFrame de historial.
+    Si manual_prefix se proporciona (no None), se utiliza para generar los códigos.
     """
     if df_history.empty:
         existing_codes = set()
@@ -60,18 +74,19 @@ def get_unique_codes(df_history, num_codes, max_attempts=10000):
     new_codes = []
     attempts = 0
     while len(new_codes) < num_codes and attempts < max_attempts:
-        candidate = generate_random_code()
+        if manual_prefix is not None:
+            candidate = generate_random_code_with_prefix(manual_prefix, CODE_LENGTH)
+        else:
+            candidate = generate_random_code()
         if candidate not in existing_codes and candidate not in new_codes:
             new_codes.append(candidate)
-            existing_codes.add(
-                candidate
-            )  # Add to set to prevent internal duplicates too
+            existing_codes.add(candidate)
         attempts += 1
 
     if len(new_codes) < num_codes:
         raise ValueError(
             f"No se pudieron generar {num_codes} códigos únicos después de {max_attempts} intentos. "
-            f"Considera aumentar la longitud del código o reducir la cantidad solicitada."
+            "Considera aumentar la longitud del código o reducir la cantidad solicitada."
         )
     return new_codes
 
@@ -124,7 +139,6 @@ def render_unique_codes_pdf(codes_list):
 def main():
     ensure_session_state()
     """Main function to be called by the Streamlit navigation."""
-    # --- UI for Unique Codes Page ---
     st.header("Códigos Únicos para Entradas")
 
     # 1. Upload History
@@ -185,23 +199,43 @@ def main():
             max_value=1000,
             step=1,
             value=1,
-        )  # Adjust max as needed
+        )
+        # Nuevo toggle para forzar prefijo manual
+        use_manual_prefix = st.checkbox(
+            "Forzar manualmente hasta 4 dígitos en mayúsculas"
+        )
+        manual_prefix = None
+        if use_manual_prefix:
+            manual_prefix_input = st.text_input(
+                "Ingresa hasta 4 caracteres (solo letras y números)", max_chars=4
+            )
+            if manual_prefix_input:
+                # Convertir a mayúsculas y validar sólo letras y números
+                manual_prefix_input = manual_prefix_input.upper()
+                if not manual_prefix_input.isalnum():
+                    st.error("El prefijo debe contener solo letras y números.")
+                else:
+                    manual_prefix = manual_prefix_input
 
         if st.button("Generar Códigos"):
             if num_codes_needed <= 0:
                 st.warning("Por favor, indica un número válido de códigos a generar.")
+            elif use_manual_prefix and manual_prefix is None:
+                st.error("Debes ingresar un prefijo válido.")
             else:
                 try:
                     with st.spinner("Generando códigos únicos..."):
                         new_codes = get_unique_codes(
-                            st.session_state.df_unique_history, num_codes_needed
+                            st.session_state.df_unique_history,
+                            num_codes_needed,
+                            manual_prefix=manual_prefix,
                         )
                         st.session_state.newly_generated_codes = new_codes
                         st.success(f"¡{len(new_codes)} códigos generados con éxito!")
                         st.write("Códigos generados:")
                         st.code("\n".join(new_codes))
 
-                        # Provide updated Excel download immediately after generation
+                        # Proporcionar la descarga de Excel actualizada inmediatamente
                         excel_buffer, excel_filename = get_updated_history_excel(
                             st.session_state.df_unique_history, new_codes
                         )
