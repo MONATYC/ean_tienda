@@ -111,7 +111,7 @@ def render_unique_codes_pdf(codes_list):
         c.setFont("Helvetica-Bold", 18)
         # Posicionar el código: 160 mm desde la izquierda y 70 mm desde arriba
         x = 160 * mm
-        y = height - (70 * mm)
+        y = height - (85 * mm)
         c.drawString(x, y, code)
         c.showPage()  # Nueva página para cada código
 
