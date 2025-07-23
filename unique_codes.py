@@ -100,7 +100,7 @@ def get_updated_history_excel(df_history, new_codes):
 
 
 def render_unique_codes_pdf(codes_list):
-    """Generates a PDF with one unique code per page."""
+    """Genera un PDF con un código único por página."""
     if not codes_list:
         return None
     buffer = BytesIO()
@@ -109,12 +109,11 @@ def render_unique_codes_pdf(codes_list):
 
     for code in codes_list:
         c.setFont("Helvetica-Bold", 18)
-        # Center the code on the page
-        text_width = c.stringWidth(code, "Helvetica-Bold", 18)
-        x = (width - text_width) / 2
-        y = height / 2  # Vertically center
+        # Posicionar el código: 160 mm desde la izquierda y 70 mm desde arriba
+        x = 160 * mm
+        y = height - (70 * mm)
         c.drawString(x, y, code)
-        c.showPage()  # New page for each code
+        c.showPage()  # Nueva página para cada código
 
     c.save()
     buffer.seek(0)
