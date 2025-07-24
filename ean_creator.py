@@ -1,24 +1,22 @@
 # ean_creator.py
+import os
+import re
+from datetime import datetime
+from io import BytesIO
 
-# Import statements remain the same
 import streamlit as st
 import pandas as pd
 import barcode
 from barcode.ean import IllegalCharacterError, NumberOfDigitsError, _ean
 from barcode.base import Barcode
 from barcode.writer import ImageWriter
-from reportlab.pdfgen import canvas
+
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
-from io import BytesIO
-import os
-from datetime import datetime
 
 
-# ------------------------
-#  CUSTOM BARCODE CLASS (Keep as is)
-# ------------------------
 class EAN13NoChecksum(Barcode):
     """
     Barcode class that keeps the provided 13 digits unchanged.
@@ -61,10 +59,25 @@ class EAN13NoChecksum(Barcode):
         return [code]
 
 
+def update_filename(original_filename, update_label, date_format):
+    """
+    Elimina del nombre base cualquier sufijo de fecha en los formatos:
+    _YYYYMMDD o _actualizado_YYYYMMDD_HHMMSS y añade el nuevo sufijo.
+    Ejemplo:
+      original: inventario_20250711.xlsx
+      update_label: "_"
+      date_format: "%Y%m%d"
+      resultado: inventario_20250724.xlsx
+    """
+    base, ext = os.path.splitext(original_filename)
+    new_base = re.sub(r"(?:_actualizado)?_\d{8}(?:_\d{6})?$", "", base)
+    new_date = datetime.now().strftime(date_format)
+    return f"{new_base}{update_label}{new_date}{ext}"
+
+
 # -----------------------------------
-#  SESSION STATE INITIALIZATION (Keep as is)
+#  SESSION STATE INITIALIZATION
 # -----------------------------------
-# Note: st.set_page_config is removed from here and moved to app.py
 if "df_inventory" not in st.session_state:
     st.session_state.df_inventory = pd.DataFrame(columns=["Producto", "EAN"])
 if "uploaded_filename" not in st.session_state:
@@ -80,7 +93,7 @@ def ensure_session_state():
 
 
 # -----------------------------------
-#  FUNCTIONS (Keep as is)
+#  FUNCTIONS
 # -----------------------------------
 COUNTRY_PREFIX = "84370000"  # 8-digits : 84 (ES) + 370000 (organización)
 
@@ -93,7 +106,6 @@ def _next_sequential_number(df: pd.DataFrame) -> int:
     """
     if df.empty or "EAN" not in df.columns:
         return 1
-    # Filtrar EANs que siguen el patrón: empiezan con el prefijo y tienen 13 dígitos numéricos.
     pattern_eans = df[
         df["EAN"].str.startswith(COUNTRY_PREFIX, na=False)
         & (df["EAN"].str.len() == 13)
@@ -101,7 +113,6 @@ def _next_sequential_number(df: pd.DataFrame) -> int:
     ]
     if pattern_eans.empty:
         return 1
-    # Extraer la parte secuencial, convertir a número y encontrar el máximo.
     seq_numbers = pd.to_numeric(pattern_eans["EAN"].str.slice(8, 12), errors="coerce")
     if seq_numbers.dropna().empty:
         return 1
@@ -147,24 +158,18 @@ def get_inventory_excel():
 # -----------------------------------
 def main():
     ensure_session_state()
-    # All your original UI code goes here, inside this function
-    # Remove the st.set_page_config line from here if it exists
 
-    # -----------------------------------
-    #  UI: 1. CARGA DE INVENTARIO (Keep as is)
-    # -----------------------------------
+    # 1. CARGA DE INVENTARIO
     st.header("1. Carga de inventario")
     uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
     if uploaded_file and uploaded_file.name != st.session_state.get(
         "uploaded_filename"
     ):
         try:
-            # Leer la primera hoja independientemente del nombre
             xl = pd.ExcelFile(uploaded_file)
             first_sheet = xl.sheet_names[0]
             df = xl.parse(first_sheet, dtype=str)
             df.columns = [c.strip() for c in df.columns]
-            # Renombrar
             col_map = {}
             for col in df.columns:
                 col_lower = col.lower()
@@ -187,17 +192,14 @@ def main():
             st.caption("Se muestran las primeras 5 filas.")
         except Exception as e:
             st.error(f"Error al leer el archivo: {e}")
-    # -----------------------------------
-    #  UI: 2. AÑADIR PRODUCTO (Keep as is)
-    # -----------------------------------
+
+    # 2. AÑADIR PRODUCTO
     st.header("2. Añadir producto")
     if st.session_state.uploaded_filename is None:
         st.warning("Primero debes cargar un archivo de inventario en el paso 1.")
     else:
         with st.form("new_product_form"):
-            # Solo un campo para el nombre de producto
             product_name = st.text_input("Nombre de producto").strip()
-            # Sugerir EAN compatible libre
             if not st.session_state.df_inventory.empty:
                 used_eans = set(st.session_state.df_inventory["EAN"].values)
                 seq = _next_sequential_number(st.session_state.df_inventory)
@@ -215,6 +217,7 @@ def main():
                     seq += 1
             else:
                 suggested_ean = ""
+
             ean_input = st.text_input(
                 "Código EAN-13",
                 value=suggested_ean,
@@ -222,6 +225,7 @@ def main():
                 max_chars=13,
             )
             submitted = st.form_submit_button("Añadir producto")
+
             if submitted:
                 if not product_name:
                     st.warning("Debes indicar el nombre del producto.")
@@ -245,9 +249,8 @@ def main():
                 st.success(
                     f"¡Añadido con éxito! Producto: {product_name}, EAN: {ean_input}"
                 )
-    # -----------------------------------
-    #  UI: 3. SELECCIÓN DE ETIQUETAS (Keep as is)
-    # -----------------------------------
+
+    # 3. SELECCIÓN DE ETIQUETAS
     st.header("3. Selección de etiquetas")
     selected_products = st.multiselect(
         "Elige productos para imprimir (máx. 10)",
@@ -262,7 +265,7 @@ def main():
         width, height = A4
         margin_x = 8 * mm
         margin_y = 12 * mm
-        extra_bottom_margin = -3 * mm  # Añade 3mm de margen blanco inferior
+        extra_bottom_margin = -3 * mm
         cols = 3
         rows = 8
         cell_w = 65 * mm
@@ -273,12 +276,12 @@ def main():
         img_max_w = cell_w - 2 * h_margin
         img_max_h = cell_h - 2 * v_margin - text_block_h
         writer_opts = {
-            "module_width": 0.70,  # ancho de módulo en mm
-            "module_height": 25.0,  # altura del código de barras en mm
-            "quiet_zone": 2.0,  # zona de silencio en mm
-            "font_size": 15,  # tamaño de fuente para el texto
-            "text_distance": 6.0,  # distancia entre el código y el texto
-            "dpi": 400,  # resolución en DPI
+            "module_width": 0.70,
+            "module_height": 25.0,
+            "quiet_zone": 2.0,
+            "font_size": 15,
+            "text_distance": 6.0,
+            "dpi": 400,
         }
         c = canvas.Canvas(buffer, pagesize=A4)
         for product_name in product_list:
@@ -297,7 +300,6 @@ def main():
             for row in range(rows):
                 for col in range(cols):
                     x0 = margin_x + col * cell_w
-                    # Suma el extra solo al margen inferior
                     y0 = height - (margin_y + extra_bottom_margin) - (row + 1) * cell_h
                     img_x = x0 + (cell_w - scaled_w) / 2
                     img_y = y0 + cell_h - v_margin - scaled_h
@@ -329,11 +331,10 @@ def main():
         )
     else:
         st.warning("Selecciona al menos un producto para imprimir.")
-    # -----------------------------------
-    #  UI: 4. DESCARGAR INVENTARIO COMPLETO (Keep as is)
-    # -----------------------------------
+
+    # 4. DESCARGAR INVENTARIO COMPLETO
     st.header("4. Descargar inventario actualizado")
-    output, download_name = get_inventory_excel()  # genera el Excel al vuelo
+    output, download_name = get_inventory_excel()
     st.download_button(
         label="📥 Descargar Excel",
         data=output.getvalue(),
@@ -343,6 +344,4 @@ def main():
     )
 
 
-# The main() function is called by app.py
-# if __name__ == "__main__": # This line is not needed in ean_creator.py
-#     main()
+# La función main() se debe llamar desde app.py

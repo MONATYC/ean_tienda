@@ -9,6 +9,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from datetime import datetime
 import os
+import re
 
 # --- Constants ---
 DEFAULT_FILENAME_BASE = "codigos_unicos_historial"
@@ -33,6 +34,22 @@ def ensure_session_state():
         st.session_state.uploaded_unique_filename = None
     if "newly_generated_codes" not in st.session_state:
         st.session_state.newly_generated_codes = []
+
+
+def update_filename(original_filename, update_label, date_format):
+    """
+    Elimina del nombre base cualquier sufijo de fecha en los formatos:
+    _YYYYMMDD o _actualizado_YYYYMMDD_HHMMSS y añade el nuevo sufijo.
+    Ejemplo:
+      original: codigos_unicos_historial_20250711.xlsx
+      update_label: "_actualizado_"
+      date_format: "%Y%m%d_%H%M%S"
+      resultado: codigos_unicos_historial_actualizado_20250724_153000.xlsx
+    """
+    base, ext = os.path.splitext(original_filename)
+    new_base = re.sub(r"(?:_actualizado)?_\d{8}(?:_\d{6})?$", "", base)
+    new_date = datetime.now().strftime(date_format)
+    return f"{new_base}{update_label}{new_date}{ext}"
 
 
 # --- Functions for Unique Code Generation ---
@@ -104,32 +121,37 @@ def get_updated_history_excel(df_history, new_codes):
     df_updated.to_excel(output, index=False)
     output.seek(0)
 
-    base, ext = os.path.splitext(
+    base_filename = (
         st.session_state.uploaded_unique_filename or f"{DEFAULT_FILENAME_BASE}.xlsx"
     )
-    date_suffix = datetime.now().strftime(
-        "%Y%m%d_%H%M%S"
-    )  # Include time for uniqueness
-    download_name = f"{base}_actualizado_{date_suffix}{ext}"
+    download_name = update_filename(base_filename, "_actualizado_", "%Y%m%d_%H%M%S")
     return output, download_name
 
 
 def render_unique_codes_pdf(codes_list):
-    """Genera un PDF con un código único por página."""
+    """Genera un PDF, en cada página una única línea que muestra:
+    'Cupó num:' (fuente normal) y a continuación el código en negrita.
+    """
     if not codes_list:
         return None
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=ENVELOPE_SIZE)
-    width, height = ENVELOPE_SIZE
+    x = 10 * mm
+    y = 40 * mm
+    font_size = 12
 
     for code in codes_list:
-        c.setFont("Helvetica-Bold", 14)
-        # Posicionar el código: 160 mm desde la izquierda y 70 mm desde arriba
-        x = 10 * mm
-        y = 40 * mm
-        c.drawString(x, y, code)
-        c.showPage()  # Nueva página para cada código
-
+        # Crear un objeto de texto para una línea
+        text_obj = c.beginText()
+        text_obj.setTextOrigin(x, y)
+        # Escribir la parte normal
+        text_obj.setFont("Helvetica", font_size)
+        text_obj.textOut("Cupó num: ")
+        # Escribir el código en negrita
+        text_obj.setFont("Helvetica-Bold", font_size)
+        text_obj.textOut(f"{code}")
+        c.drawText(text_obj)
+        c.showPage()
     c.save()
     buffer.seek(0)
     return buffer
